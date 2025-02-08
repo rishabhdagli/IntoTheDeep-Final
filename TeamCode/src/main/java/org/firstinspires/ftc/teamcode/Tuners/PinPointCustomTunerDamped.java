@@ -77,7 +77,7 @@ public class PinPointCustomTunerDamped extends LinearOpMode {
             double hPower = (kP_H * errorH) + (kD_H * derivativeH);
 
             // Drive the robot (reverse yPower if necessary)
-            drive.TeleopControl(-yPower, xPower, hPower);
+            //negative x power/l(-yPower, -xPower, hPower);
 
             // Update previous errors for the next iteration
             prevErrorX = errorX;
