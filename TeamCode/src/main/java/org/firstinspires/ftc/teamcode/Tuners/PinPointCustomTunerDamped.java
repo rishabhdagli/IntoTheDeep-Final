@@ -14,18 +14,15 @@ import org.firstinspires.ftc.teamcode.Pinpoint.GoBildaPinpointDriver;
 import org.firstinspires.ftc.teamcode.Subsystem.DragonWarrior;
 
 @Config
-@TeleOp(name = "PinPoint PD Tuner with Motion Profiling")
-public class PinPointCustomTuner extends LinearOpMode {
+@TeleOp(name = "PinPoint PD Tuner")
+public class PinPointCustomTunerDamped extends LinearOpMode {
 
     public static double TargetYPos = 0, TargetXPOS = 0, TargetHeading = 0;
-    public static double kP_Y = 0.01, kP_X = 0.01, kP_H = 0.01; // Proportional Gains
-    public static double kD_Y = 0.001, kD_X = 0.001, kD_H = 0.001; // Derivative Gains
-
-    public static double maxVelocity = 20; // Max speed in inches/sec
-    public static double maxAcceleration = 10; // Max acceleration in inches/sec²
+    public static double kP_Y = 0, kP_X = 0, kP_H = 0; // Proportional Gains
+    public static double kD_Y = 0, kD_X = 0, kD_H = 0; // Derivative Gains
 
     private double currentX = 0, currentY = 0, currentH = 0;
-    private double prevErrorX = 0, prevErrorY = 0, prevErrorH = 0,prevVelY;
+    private double prevErrorX = 0, prevErrorY = 0, prevErrorH = 0, prevVelY = 0;
 
     private ElapsedTime timer = new ElapsedTime();
 
@@ -50,27 +47,24 @@ public class PinPointCustomTuner extends LinearOpMode {
         dashboard = FtcDashboard.getInstance();
         tele = new MultipleTelemetry(telemetry, dashboard.getTelemetry());
 
-        // Reset the timer before the loop starts
         timer.reset();
 
         waitForStart();
 
         while (opModeIsActive()) {
-            pose = odo.getPosition(); // Get X, Y, Heading
+            pose = odo.getPosition(); // Get current X, Y, and heading
 
-            // Get current position
             currentX = pose.getX(DistanceUnit.INCH);
             currentY = pose.getY(DistanceUnit.INCH);
             currentH = pose.getHeading(AngleUnit.DEGREES);
 
-            // Calculate errors
+            // Compute errors directly from final target positions
             double errorX = TargetXPOS - currentX;
             double errorY = TargetYPos - currentY;
             double errorH = TargetHeading - currentH;
 
-            // Calculate time difference
             double deltaTime = timer.seconds();
-            timer.reset(); // Reset timer for the next loop
+            timer.reset(); // Reset timer for next loop iteration
 
             // Compute derivative terms (rate of change of error)
             double derivativeX = (errorX - prevErrorX) / deltaTime;
@@ -82,20 +76,15 @@ public class PinPointCustomTuner extends LinearOpMode {
             double yPower = (kP_Y * errorY) + (kD_Y * derivativeY);
             double hPower = (kP_H * errorH) + (kD_H * derivativeH);
 
-            // Apply motion profiling to smooth velocity transitions
-            xPower = motionProfile(TargetXPOS, currentX, maxVelocity, maxAcceleration);
-            yPower = motionProfile(TargetYPos, currentY, maxVelocity, maxAcceleration);
-            hPower = motionProfile(TargetHeading, currentH, maxVelocity, maxAcceleration);
+            // Drive the robot (reverse yPower if necessary)
+            drive.TeleopControl(-yPower, xPower, hPower);
 
-            // Drive the robot
-            drive.TeleopControl(-yPower, xPower, hPower); // Reverse Y stick value
-
-            // Store previous errors for next loop iteration
+            // Update previous errors for the next iteration
             prevErrorX = errorX;
             prevErrorY = errorY;
             prevErrorH = errorH;
 
-            // Send telemetry data
+            // Send telemetry data for debugging
             tele.addData("Target X", TargetXPOS);
             tele.addData("Target Y", TargetYPos);
             tele.addData("Target H", TargetHeading);
@@ -105,43 +94,19 @@ public class PinPointCustomTuner extends LinearOpMode {
             tele.addData("Error X", errorX);
             tele.addData("Error Y", errorY);
             tele.addData("Error H", errorH);
-            tele.addData("X Power (PD+MP)", xPower);
-            tele.addData("Y Power (PD+MP)", yPower);
-            tele.addData("H Power (PD+MP)", hPower);
+            tele.addData("X Power (PD)", xPower);
+            tele.addData("Y Power (PD)", yPower);
+            tele.addData("H Power (PD)", hPower);
             tele.addData("Loop Time (s)", deltaTime);
-            double vel = odo.getVelY();
-            tele.addData("Y vel", vel/25.4);
-            tele.addData("Yaccel", (vel - prevVelY) / deltaTime);
-            prevVelY = vel;
+//            double vel = odo.getVelY();
+//            tele.addData("Y vel (in)", vel / 25.4);
+//            tele.addData("Y Accel", (vel - prevVelY) / deltaTime);
+//            prevVelY = vel;
 
             tele.update();
 
             // Update odometry
             odo.update();
-
-            sleep(10); // Prevent CPU overload
         }
-    }
-
-    /**
-     * Motion profiling method for smooth velocity transitions.
-     * Uses a trapezoidal velocity profile to limit acceleration and deceleration.
-     *
-     * @param target Target position
-     * @param current Current position
-     * @param maxVelocity Maximum velocity allowed
-     * @param maxAccel Maximum acceleration allowed
-     * @return Adjusted power for smooth motion
-     */
-    private double motionProfile(double target, double current, double maxVelocity, double maxAccel) {
-        double error = target - current;
-        double direction = Math.signum(error);
-
-        // Compute desired velocity using a trapezoidal velocity profile
-        double velocity = Math.sqrt(2 * maxAccel * Math.abs(error));
-        velocity = Math.min(velocity, maxVelocity);
-
-        // Convert velocity to motor power (Assumes power = velocity / maxVelocity)
-        return (velocity / maxVelocity) * direction;
     }
 }
